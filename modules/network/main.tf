@@ -64,38 +64,22 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# --- NAT GATEWAY & ROUTING (Acesso à Internet para Subnets Privadas) ---
+# --- Roteamento das Subnets de Aplicação (Ex-Privadas) ---
+# Em PROD: Usaríamos NAT Gateway ($$$) e Subnets realmente privadas.
+# Em DEV: Usamos rota para o IGW para economizar custos. As instâncias precisarão de Public IP.
 
-# Elastic IP para o NAT Gateway
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = { Name = "${var.project_name}-nat-eip" }
-}
-
-# NAT Gateway (Deve ficar na Subnet PÚBLICA)
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id # Usando a primeira subnet pública para economizar (1 NAT apenas)
-
-  tags = { Name = "${var.project_name}-nat-gw" }
-
-  # Garante que o IGW exista antes de criar o NAT
-  depends_on = [aws_internet_gateway.igw]
-}
-
-# Tabela de Roteamento para Subnets Privadas
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id # Rota direta para internet (Custo Zero)
   }
 
   tags = { Name = "${var.project_name}-private-rt" }
 }
 
-# Associação das Subnets Privadas com a Tabela de Roteamento Privada
+# Associação das Subnets
 resource "aws_route_table_association" "private" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id

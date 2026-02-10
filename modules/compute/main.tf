@@ -53,7 +53,7 @@ resource "aws_launch_template" "ecs_lt" {
   }
 
   network_interfaces {
-    associate_public_ip_address = false # Instâncias em subnet privada
+    associate_public_ip_address = true  # Necessário em modo DEV (sem NAT Gateway)
     security_groups             = [var.ecs_security_group_id]
   }
 

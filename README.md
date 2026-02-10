@@ -29,7 +29,7 @@ Esta arquitetura usa **Amazon EFS** (Elastic File System) como sistema de arquiv
                                       │
                     ┌─────────────────▼───────────────────┐
                     │   Application Load Balancer (ALB)   │
-                    │   Subnets Públicas                  │
+                    │   Subnets Públicas (NAT Gateway)    │
                     └─────────────────┬───────────────────┘
                                       │ Security Group Chaining
                     ┌─────────────────▼───────────────────┐
@@ -39,7 +39,7 @@ Esta arquitetura usa **Amazon EFS** (Elastic File System) como sistema de arquiv
                     └─────┬───────────────────┬───────────┘
                           │                   │
             ┌─────────────▼───────┐   ┌───────▼──────────────┐
-            │     Amazon EFS      │   │   RDS MySQL 5.7      │
+            │     Amazon EFS      │   │   RDS MySQL 8.0      │
             │  /var/www/html      │   │   Multi-AZ           │
             │  (uploads, temas)   │   │   SSM Parameters     │
             └─────────────────────┘   └──────────────────────┘
@@ -51,9 +51,25 @@ Esta arquitetura usa **Amazon EFS** (Elastic File System) como sistema de arquiv
 |----------|---------------|
 | **Persistência compartilhada** | EFS montado em `/var/www/html` de todos os containers |
 | **Alta disponibilidade** | RDS Multi-AZ, ECS com 2+ tasks, spread entre AZs |
-| **Segurança em camadas** | Chaining de Security Groups: ALB → ECS → RDS/EFS |
-| **Segredos** | Credenciais do banco no SSM Parameter Store (não no código) |
+| **Segurança em camadas** | Chaining de SGs, segredos fora do código |
+| **Otimização de Custos (Dev)** | Instâncias com IP Público (sem NAT Gateway) para economizar ~$32/mês |
 | **Infraestrutura como Código** | Terraform modular e versionado |
+
+---
+
+## Decisões de Arquitetura & FinOps (Importante)
+
+Para este projeto, foi tomada uma decisão consciente de design focada em **FinOps** (Gestão Financeira em Nuvem):
+
+### NAT Gateway vs. Roteamento Direto via IGW
+Em uma arquitetura Enterprise de Produção, as instâncias ECS ficariam em subnets 100% privadas, acessando a internet através de um **NAT Gateway**. No entanto, o NAT Gateway possui um custo fixo de aproximadamente **US$ 32,00/mês**.
+
+**Manobra aplicada para o ambiente de Lab/Dev:**
+- **Economia:** Removemos o NAT Gateway, reduzindo a fatura mensal em cerca de 45%.
+- **Conectividade:** Configuramos as subnets de aplicação com rota direta para o **Internet Gateway (IGW)** e habilitamos IPs públicos nas instâncias EC2. Isso permite que o ECS realize o `docker pull` das imagens sem custos adicionais.
+- **Segurança Mantida:** Mesmo com IPs públicos, a segurança **não foi comprometida**. Utilizamos o conceito de **Security Group Chaining**, onde as instâncias ECS aceitam tráfego estritamente vindo do Load Balancer (ALB). Qualquer tentativa de acesso direto da internet é descartada na camada de firewall da AWS.
+
+Esta abordagem demonstra a capacidade de arquitetar soluções que equilibram **Alta Disponibilidade**, **Segurança** e **Eficiência de Custos**.
 
 ---
 
@@ -62,10 +78,10 @@ Esta arquitetura usa **Amazon EFS** (Elastic File System) como sistema de arquiv
 - **Terraform** – IaC (módulos reutilizáveis)  
 - **Amazon ECS** – Orquestração de containers  
 - **Amazon EFS** – Storage compartilhado  
-- **Amazon RDS** – MySQL 5.7 Multi-AZ  
+- **Amazon RDS** – MySQL 8.0 Multi-AZ  
 - **Application Load Balancer** – Tráfego HTTP e health checks  
 - **SSM Parameter Store** – Credenciais do banco  
-- **VPC** – Subnets públicas/privadas, Security Groups  
+- **VPC** – Subnets públicas/privadas, NAT Gateway  
 
 ---
 
@@ -136,11 +152,11 @@ Após o apply, o output `website_url` mostra a URL do WordPress (ex.: `http://xx
 
 | Recurso | Custo aproximado/mês |
 |---------|----------------------|
-| EC2 (2x t2.micro) | ~US$ 17 |
+| EC2 (2x t3.micro) | ~US$ 18 |
 | RDS Multi-AZ | ~US$ 30 |
 | ALB | ~US$ 16 |
 | EFS | ~US$ 1–5 |
-| **Total** | **~US$ 65** |
+| **Total** | **~US$ 65–70** |
 
 **Dica:** Use `terraform destroy` ao final dos testes para evitar cobranças contínuas.
 
