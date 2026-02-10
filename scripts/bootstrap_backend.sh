@@ -1,13 +1,13 @@
 #!/bin/bash
 # Usage: ./bootstrap_backend.sh <region> <project-name>
 # Ex: ./bootstrap_backend.sh us-east-1 ha-wordpress-lab
+# Nota: Usa apenas S3 (sem DynamoDB) - ideal para uso solo/teste
 
 REGION=$1
 PROJECT=$2
 BUCKET_NAME="${PROJECT}-tf-state-${RANDOM}"
-DYNAMO_TABLE="${PROJECT}-tf-lock"
 
-echo ">>> Iniciando Bootstrap do Backend Terraform..."
+echo ">>> Iniciando Bootstrap do Backend Terraform (S3 apenas)..."
 
 # Criar Bucket S3
 if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
@@ -19,20 +19,11 @@ else
   aws s3api put-bucket-versioning --bucket "$BUCKET_NAME" --versioning-configuration Status=Enabled
 fi
 
-# Criar Tabela DynamoDB para State Locking
-if aws dynamodb describe-table --table-name "$DYNAMO_TABLE" --region "$REGION" 2>/dev/null; then
-  echo "Tabela DynamoDB $DYNAMO_TABLE já existe."
-else
-  echo "Criando Tabela DynamoDB $DYNAMO_TABLE..."
-  aws dynamodb create-table \
-    --table-name "$DYNAMO_TABLE" \
-    --attribute-definitions AttributeName=LockID,AttributeType=S \
-    --key-schema AttributeName=LockID,KeyType=HASH \
-    --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-    --region "$REGION"
-fi
-
 echo ">>> Bootstrap Concluído."
 echo "Bucket: $BUCKET_NAME"
-echo "DynamoDB Table: $DYNAMO_TABLE"
-echo "Configure seu backend.tf com estes valores."
+echo ""
+echo "Configure seu backend.tf com:"
+echo "  bucket = \"$BUCKET_NAME\""
+echo "  region = \"$REGION\""
+echo ""
+echo "Atenção: Sem DynamoDB não há state locking. Evite rodar terraform apply em paralelo."
