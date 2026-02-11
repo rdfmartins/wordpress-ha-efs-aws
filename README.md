@@ -2,6 +2,9 @@
 
 Arquitetura de WordPress em **Alta Disponibilidade** na AWS, usando ECS, EFS e RDS. Infraestrutura como Código com Terraform.
 
+<img width="1718" height="935" alt="image" src="https://github.com/user-attachments/assets/3c9d3cc0-84bb-4cd9-8a76-2d8929546583" />
+
+
 ---
 
 ## O que foi construído (e por quê)
